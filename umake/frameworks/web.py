@@ -45,6 +45,59 @@ class WebCategory(umake.frameworks.BaseCategory):
         super().__init__(name="Web", description=_("Web Developer Environment"), logo_path=None)
 
 
+class Atom(umake.frameworks.baseinstaller.BaseInstaller):
+
+    def __init__(self, category):
+        super().__init__(name="Atom", description=_("Atom a hackable text editor for the 21st Century"),
+                         category=category, only_on_archs=['amd64'],
+                         download_page="https://github.com/atom/atom/releases/latest",
+                         dir_to_decompress_in_tarball="./usr/share/atom",
+                         desktop_filename="atom.desktop")
+
+    def parse_download_link(self, line, in_download):
+        """Parse Atom download links, expect to find a url"""
+        url = None
+
+        p = re.search(r'<a href="(.*).deb" rel="nofollow">', line)
+        if p:
+            in_download = True
+
+        if in_download:
+            p = re.search(r'<a href="(.*)" rel="nofollow">', line)
+            with suppress(AttributeError):
+                url = p.group(1)
+
+                url = self.download_page[:self.download_page.find("atom/") - 1] + url
+
+            if not url:
+                in_download = False
+            if url and "amd64" in line:
+                in_download = False
+
+        if url is None:
+            return None, in_download
+
+        return (url, None), in_download
+
+    def decompress_and_install(self, fds):
+        """Override to strip the unwanted part"""
+        logger.debug("Start looking at the archive inside the deb file")
+        for line in fds[0]:
+            if b"data.tar.gz" in line:
+                logger.debug("Found the archive inside the script")
+                break
+        super().decompress_and_install(fds)
+
+    def post_install(self):
+        """Create the Atom launcher"""
+        create_launcher(self.desktop_filename, get_application_desktop_file(name=_("Atom"),
+                        icon_path=os.path.join(self.install_path, "resources", "app.asar.unpacked", "resources",
+                                               "atom.png"),
+                        exec=os.path.join(self.install_path, "atom"),
+                        comment=_("Hackable text editor for the 21st Century"),
+                        categories="Development;IDE;"))
+
+
 class FirefoxDev(umake.frameworks.baseinstaller.BaseInstaller):
 
     def __init__(self, category):
